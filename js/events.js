@@ -323,7 +323,7 @@ function _onPointerDown(cx, cy, target) {
     drag.type   = 'group-draw';
     gDraw.x0 = w.x;
     gDraw.y0 = w.y;
-    _showSelRect(w.x, w.y, 0, 0);
+    _showSelRect(cx, cy, 0, 0); // 화면 좌표로 초기 표시
     return;
   }
 
@@ -399,26 +399,24 @@ function _onPointerMove(cx, cy) {
   }
 
   if (drag.type === 'select') {
-    // 선택 사각형 (스크린 좌표)
+    // sel-rect은 #world 밖(SVG 루트)에 있으므로 화면 좌표를 그대로 사용
     const x0 = drag.screenStartX, y0 = drag.screenStartY;
     const rx = Math.min(x0, cx), ry = Math.min(y0, cy);
     const rw = Math.abs(cx - x0), rh = Math.abs(cy - y0);
-    // SVG screen-space rect → world 변환 없이 화면 좌표로 표시
-    // sel-rect은 world 외부에 있어서 직접 스크린 좌표 사용 불가
-    // → world 좌표로 변환해서 rect 위치 설정
-    const wTL = s2w(rx, ry);
-    const wBR = s2w(rx + rw, ry + rh);
-    _showSelRect(wTL.x, wTL.y, wBR.x - wTL.x, wBR.y - wTL.y);
+    _showSelRect(rx, ry, rw, rh);
     return;
   }
 
   if (drag.type === 'group-draw') {
-    const w2 = s2w(cx, cy);
-    const rx  = Math.min(gDraw.x0, w2.x);
-    const ry  = Math.min(gDraw.y0, w2.y);
-    const rw  = Math.abs(w2.x - gDraw.x0);
-    const rh  = Math.abs(w2.y - gDraw.y0);
-    _showSelRect(rx, ry, rw, rh);
+    // 월드 좌표로 영역 계산 후 w2s()로 화면 좌표로 변환해서 sel-rect에 적용
+    const w2  = s2w(cx, cy);
+    const wx0 = Math.min(gDraw.x0, w2.x);
+    const wy0 = Math.min(gDraw.y0, w2.y);
+    const wx1 = Math.max(gDraw.x0, w2.x);
+    const wy1 = Math.max(gDraw.y0, w2.y);
+    const sTL = w2s(wx0, wy0);
+    const sBR = w2s(wx1, wy1);
+    _showSelRect(sTL.x, sTL.y, sBR.x - sTL.x, sBR.y - sTL.y);
     return;
   }
 }
@@ -504,6 +502,11 @@ function _onPointerUp(cx, cy, e) {
   }
 
   if (drag.type === 'pan') {
+    if (!drag.moved) {
+      // 빈 캔버스 탭 → 새 노드 생성
+      dispatch('CREATE_NODE', { x: w.x, y: w.y });
+      hideHint();
+    }
     _endDrag(); return;
   }
 
@@ -540,18 +543,8 @@ function _onPointerUp(cx, cy, e) {
     _endDrag(); return;
   }
 
-  // 빈 캔버스 탭 (이동 없음)
-  if (!drag.moved && drag.type === 'pan') {
-    // 새 노드 생성
-    dispatch('CREATE_NODE', { x: w.x, y: w.y });
-    hideHint();
-  }
-
   _endDrag();
 }
-
-// 빈 캔버스 탭으로 노드 생성 (pan 타입이 moved 없이 끝날 때)
-// ※ _onPointerUp 에서 처리됨
 
 function _cancelDrag() {
   hideGhostEdge();
