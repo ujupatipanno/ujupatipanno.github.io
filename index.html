@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Thought Space">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/lucide@0.263.1/dist/umd/lucide.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lucide/dist/umd/lucide.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -289,7 +289,7 @@
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
   // Init
-  lucide.createIcons();
+  if (typeof lucide !== 'undefined') lucide.createIcons();
   init();
 </script>
 </body>
