@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Thought Space</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#070b0e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Thought Space">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@0.263.1/dist/umd/lucide.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ── CANVAS ── -->
+<svg id="canvas">
+  <defs>
+    <!-- Dot grid pattern -->
+    <pattern id="pat-dots" x="0" y="0" width="32" height="32" patternUnits="userSpaceOnUse">
+      <circle cx="16" cy="16" r="1" fill="#1e3045"/>
+    </pattern>
+    <!-- Line grid pattern -->
+    <pattern id="pat-lines" x="0" y="0" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0 L0 0 0 32" fill="none" stroke="#1e3045" stroke-width="0.5"/>
+    </pattern>
+    <!-- Arrow markers -->
+    <marker id="arr-fwd" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
+      <path d="M0,1 L6,3.5 L0,6 Z" fill="#4a6578"/>
+    </marker>
+    <marker id="arr-bwd" markerWidth="7" markerHeight="7" refX="2" refY="3.5" orient="auto-start-reverse">
+      <path d="M0,1 L6,3.5 L0,6 Z" fill="#4a6578"/>
+    </marker>
+    <marker id="arr-fwd-hi" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
+      <path d="M0,1 L6,3.5 L0,6 Z" fill="#00d4ff"/>
+    </marker>
+    <marker id="arr-bwd-hi" markerWidth="7" markerHeight="7" refX="2" refY="3.5" orient="auto-start-reverse">
+      <path d="M0,1 L6,3.5 L0,6 Z" fill="#00d4ff"/>
+    </marker>
+    <!-- Blur filter -->
+    <filter id="node-blur" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="4"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect id="bg-rect" x="-9999" y="-9999" width="19998" height="19998" fill="url(#pat-dots)"/>
+
+  <!-- World group (camera transform applied here) -->
+  <g id="world">
+    <g id="groups-layer"></g>
+    <g id="edges-layer"></g>
+    <g id="nodes-layer"></g>
+    <g id="drag-layer"></g>
+  </g>
+
+  <!-- Selection rectangle (stays in screen space) -->
+  <rect id="sel-rect" fill="rgba(0,212,255,0.06)" stroke="#00d4ff" stroke-width="1"
+        stroke-dasharray="5,3" rx="3" display="none"/>
+</svg>
+
+<!-- ── ZOOM INDICATOR ── -->
+<div id="zoom-ind">100%</div>
+
+<!-- ── HINT TEXT ── -->
+<div id="hint">Tap anywhere to create a node</div>
+
+<!-- ── MINIMAP ── -->
+<canvas id="minimap" width="180" height="110"></canvas>
+
+<!-- ── BOTTOM BAR ── -->
+<div id="bottom-bar">
+  <div id="bb-left">
+    <div id="bb-dot"></div>
+    <div id="bb-label-wrap">
+      <span id="bb-title"></span>
+      <span id="bb-sub"></span>
+    </div>
+  </div>
+  <div id="bb-note-wrap">
+    <span id="bb-note"></span>
+  </div>
+  <button id="bb-edit-btn" title="Edit note">
+    <i data-lucide="pencil"></i>
+  </button>
+</div>
+
+<!-- ── BOTTOM BAR NOTE EDITOR ── -->
+<div id="note-editor">
+  <textarea id="note-textarea" placeholder="Add a note…"></textarea>
+  <div id="note-editor-btns">
+    <button id="note-cancel">Cancel</button>
+    <button id="note-save">Save</button>
+  </div>
+</div>
+
+<!-- ── EDIT BAR ── -->
+<div id="edit-bar">
+  <button class="eb-btn" id="eb-color" title="Color"><i data-lucide="palette"></i></button>
+  <button class="eb-btn" id="eb-shape" title="Shape"><i data-lucide="shapes"></i></button>
+  <button class="eb-btn" id="eb-size"  title="Size"><i data-lucide="maximize-2"></i></button>
+  <button class="eb-btn" id="eb-border" title="Border"><i data-lucide="circle-dashed"></i></button>
+  <div class="eb-sep"></div>
+  <button class="eb-btn" id="eb-dupe"  title="Duplicate"><i data-lucide="copy"></i></button>
+  <button class="eb-btn" id="eb-lock"  title="Lock"><i data-lucide="lock-open"></i></button>
+  <button class="eb-btn danger" id="eb-del" title="Delete"><i data-lucide="trash-2"></i></button>
+</div>
+
+<!-- ── EDIT BAR SUBMENUS ── -->
+<div id="sub-color" class="submenu">
+  <button class="sw" data-color="#00d4ff" style="background:#00d4ff"></button>
+  <button class="sw" data-color="#ff6b35" style="background:#ff6b35"></button>
+  <button class="sw" data-color="#a855f7" style="background:#a855f7"></button>
+  <button class="sw" data-color="#10b981" style="background:#10b981"></button>
+  <button class="sw" data-color="#f59e0b" style="background:#f59e0b"></button>
+  <button class="sw" data-color="#ef4444" style="background:#ef4444"></button>
+</div>
+<div id="sub-shape" class="submenu">
+  <button class="sb-opt" data-shape="circle" title="Circle"><i data-lucide="circle"></i></button>
+  <button class="sb-opt" data-shape="square" title="Square"><i data-lucide="square"></i></button>
+  <button class="sb-opt" data-shape="triangle" title="Triangle"><i data-lucide="triangle"></i></button>
+</div>
+<div id="sub-size" class="submenu">
+  <button class="sb-opt" data-size="S">S</button>
+  <button class="sb-opt" data-size="M">M</button>
+  <button class="sb-opt" data-size="L">L</button>
+</div>
+<div id="sub-border" class="submenu">
+  <button class="sb-opt" data-border="sharp" title="Sharp"><i data-lucide="minus"></i></button>
+  <button class="sb-opt" data-border="blur"  title="Blur"><i data-lucide="blend"></i></button>
+</div>
+
+<!-- ── SIDEBAR ── -->
+<div id="sidebar">
+  <div id="sidebar-tabs">
+    <button class="stab" id="stab-pin"     data-panel="panel-pin"     title="Pins"><i data-lucide="pin"></i></button>
+    <button class="stab" id="stab-groups"  data-panel="panel-groups"  title="Groups"><i data-lucide="users"></i></button>
+    <button class="stab" id="stab-present" data-panel="panel-present" title="Present"><i data-lucide="presentation"></i></button>
+    <div class="stab-sep"></div>
+    <button class="stab" id="stab-share"   data-panel="panel-share"   title="Share"><i data-lucide="share-2"></i></button>
+    <button class="stab" id="stab-export"  data-panel="panel-export"  title="Export"><i data-lucide="image"></i></button>
+    <button class="stab" id="stab-settings" data-panel="panel-settings" title="Settings"><i data-lucide="settings"></i></button>
+    <div class="stab-spacer"></div>
+    <button class="stab" id="btn-undo" title="Undo"><i data-lucide="rotate-ccw"></i></button>
+    <button class="stab" id="btn-redo" title="Redo"><i data-lucide="rotate-cw"></i></button>
+    <div id="save-status">—</div>
+  </div>
+
+  <div id="sidebar-panel">
+    <!-- PIN PANEL -->
+    <div class="s-panel" id="panel-pin">
+      <div class="panel-hd"><span class="panel-title">Pins</span></div>
+      <div class="panel-body" id="pin-list">
+        <p class="p-empty">No pins yet.<br>Style a node and tap the pin button.</p>
+      </div>
+    </div>
+
+    <!-- GROUPS PANEL -->
+    <div class="s-panel" id="panel-groups">
+      <div class="panel-hd">
+        <span class="panel-title">Groups</span>
+        <button class="p-new-btn" id="btn-new-group"><i data-lucide="plus"></i> New</button>
+      </div>
+      <div class="panel-body" id="group-list">
+        <p class="p-empty">No groups yet.<br>Tap New to draw a group area.</p>
+      </div>
+    </div>
+
+    <!-- PRESENT PANEL -->
+    <div class="s-panel" id="panel-present">
+      <div class="panel-hd"><span class="panel-title">Present</span></div>
+      <div class="panel-body" id="present-setup">
+        <p class="p-label">Choose what to present:</p>
+        <button class="p-action-btn" id="btn-present-all">All nodes</button>
+        <div id="present-group-list"></div>
+      </div>
+    </div>
+
+    <!-- SHARE PANEL -->
+    <div class="s-panel" id="panel-share">
+      <div class="panel-hd"><span class="panel-title">Share</span></div>
+      <div class="panel-body">
+        <p class="p-label">Copy a link with your whole canvas.</p>
+        <button class="p-action-btn" id="btn-share-url"><i data-lucide="link"></i> Copy Link</button>
+        <p class="p-warn" id="share-warn" style="display:none">
+          Canvas too large for a link. Use JSON export instead.
+        </p>
+      </div>
+    </div>
+
+    <!-- EXPORT PANEL -->
+    <div class="s-panel" id="panel-export">
+      <div class="panel-hd"><span class="panel-title">Export</span></div>
+      <div class="panel-body">
+        <p class="p-label">Save your canvas</p>
+        <button class="p-action-btn" id="btn-save-json"><i data-lucide="download"></i> Save JSON</button>
+        <button class="p-action-btn" id="btn-load-json"><i data-lucide="upload"></i> Load JSON</button>
+        <input type="file" id="file-input" accept=".json" style="display:none">
+        <div class="panel-sep"></div>
+        <p class="p-label">Export as image</p>
+        <button class="p-action-btn" id="btn-export-png"><i data-lucide="image"></i> PNG</button>
+        <button class="p-action-btn" id="btn-export-svg"><i data-lucide="file-code"></i> SVG</button>
+      </div>
+    </div>
+
+    <!-- SETTINGS PANEL -->
+    <div class="s-panel" id="panel-settings">
+      <div class="panel-hd"><span class="panel-title">Settings</span></div>
+      <div class="panel-body">
+        <p class="p-label">Grid style</p>
+        <div class="toggle-row">
+          <button class="tog active" id="tog-dots">Dots</button>
+          <button class="tog" id="tog-lines">Lines</button>
+        </div>
+        <div class="panel-sep"></div>
+        <p class="p-label">Select mode</p>
+        <button class="p-action-btn" id="btn-select-mode"><i data-lucide="mouse-pointer-2"></i> Select Mode</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── RESET BUTTON ── -->
+<button id="btn-reset" title="Clear canvas"><i data-lucide="rotate-ccw"></i></button>
+
+<!-- ── PRESENTATION UI ── -->
+<div id="present-ui">
+  <button id="present-prev"><i data-lucide="chevron-left"></i></button>
+  <span id="present-counter">1 / 1</span>
+  <button id="present-next"><i data-lucide="chevron-right"></i></button>
+  <button id="present-exit"><i data-lucide="x"></i></button>
+</div>
+
+<!-- ── GROUP DRAW MODE HINT ── -->
+<div id="group-draw-hint">Drag on the canvas to define a group area</div>
+
+<!-- ── SELECT MODE INDICATOR ── -->
+<div id="select-mode-ind"><i data-lucide="mouse-pointer-2"></i> Select Mode — tap nodes to add to selection</div>
+
+<!-- ── MODALS ── -->
+<div id="modal-overlay">
+  <!-- Save JSON -->
+  <div class="modal" id="modal-save">
+    <p class="modal-title">Save as JSON</p>
+    <input type="text" id="modal-save-name" placeholder="my-canvas" autocomplete="off">
+    <div class="modal-btns">
+      <button class="mbtn" id="modal-save-cancel">Cancel</button>
+      <button class="mbtn primary" id="modal-save-ok">Save</button>
+    </div>
+  </div>
+
+  <!-- Load JSON -->
+  <div class="modal" id="modal-load">
+    <p class="modal-title">Load JSON</p>
+    <p class="modal-sub">Replace everything, or merge with current canvas?</p>
+    <div class="modal-btns">
+      <button class="mbtn" id="modal-load-cancel">Cancel</button>
+      <button class="mbtn" id="modal-load-merge">Merge</button>
+      <button class="mbtn primary" id="modal-load-replace">Replace</button>
+    </div>
+  </div>
+
+  <!-- Reset confirm -->
+  <div class="modal" id="modal-reset">
+    <p class="modal-title">Clear everything?</p>
+    <p class="modal-sub">This cannot be undone.</p>
+    <div class="modal-btns">
+      <button class="mbtn" id="modal-reset-cancel">Cancel</button>
+      <button class="mbtn danger" id="modal-reset-ok">Clear</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── TOAST ── -->
+<div id="toast"></div>
+
+<!-- ── SCRIPTS (order matters) ── -->
+<script src="js/state.js"></script>
+<script src="js/render.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/events.js"></script>
+<script src="js/persist.js"></script>
+<script>
+  // Register service worker
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+  // Init
+  lucide.createIcons();
+  init();
+</script>
+</body>
+</html>
