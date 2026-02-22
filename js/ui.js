@@ -61,7 +61,7 @@ function syncEditBarLock(n) {
   const locked = n ? n.locked : false;
   icon.setAttribute('data-lucide', locked ? 'lock' : 'lock-open');
   btn.classList.toggle('active', locked);
-  lucide.createIcons();
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 // 모든 서브메뉴 닫기
@@ -658,7 +658,7 @@ function initUI() {
       dispatch('ADD_PIN', { id: nid });
     });
     pinHd.appendChild(btn);
-    lucide.createIcons();
+    if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
   // 저장된 패널 상태 복원
